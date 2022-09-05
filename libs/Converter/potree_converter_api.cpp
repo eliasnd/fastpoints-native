@@ -154,6 +154,7 @@ namespace potree_converter {
 
         vector<string> expanded;
         for (auto path : paths) {
+            cout << "got path " << path << endl;
             if (fs::is_directory(path)) {
                 for (auto& entry : fs::directory_iterator(path)) {
                     string str = entry.path().string();
@@ -446,6 +447,8 @@ namespace potree_converter {
     }
 
     void convert(string source, string outdir) {
+
+        cout << "Converting " << source << " to " << outdir << endl;
 
         double tStart = now(); 
 

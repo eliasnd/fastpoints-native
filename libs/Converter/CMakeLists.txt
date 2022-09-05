@@ -5,7 +5,7 @@ project(PotreeConverter LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+# set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 
 #message(${PROJECT_SOURCE_DIR})
 
@@ -40,8 +40,8 @@ add_library(PotreeConverter
 	${HEADER_FILES}
 )
 
-set(LASZIP_DIR "${PROJECT_SOURCE_DIR}/libs/laszip")
-add_subdirectory(${LASZIP_DIR})
+# set(LASZIP_DIR "${PROJECT_SOURCE_DIR}/libs/laszip")
+# add_subdirectory(${LASZIP_DIR})
 target_link_libraries(PotreeConverter laszip)
 
 set(BROTLI_DIR "${PROJECT_SOURCE_DIR}/libs/brotli")
@@ -50,9 +50,9 @@ target_link_libraries(PotreeConverter brotlienc-static)
 target_link_libraries(PotreeConverter brotlidec-static)
 
 
+target_include_directories(PotreeConverter PRIVATE "./libs")
 target_include_directories(PotreeConverter PRIVATE "./include")
 target_include_directories(PotreeConverter PRIVATE "./modules")
-target_include_directories(PotreeConverter PRIVATE "./libs")
 
 if(APPLE)
 	## Do nothing. Just skip the Unix check
@@ -80,11 +80,11 @@ endif ()
 ###############################################
 # COPY LICENSE FILES TO BINARY DIRECTORY
 ###############################################
-add_custom_command(
-	TARGET PotreeConverter POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy
-		${LASZIP_DIR}/COPYING
-		$<TARGET_FILE_DIR:${PROJECT_NAME}>/licenses/license_laszip.txt)
+# add_custom_command(
+# 	TARGET PotreeConverter POST_BUILD
+# 	COMMAND ${CMAKE_COMMAND} -E copy
+# 		${LASZIP_DIR}/COPYING
+# 		$<TARGET_FILE_DIR:${PROJECT_NAME}>/licenses/license_laszip.txt)
 
 add_custom_command(
 	TARGET PotreeConverter POST_BUILD
