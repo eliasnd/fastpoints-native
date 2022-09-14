@@ -26,6 +26,10 @@
   
     9 May 2020 -- added silly 'obj_info' used by Cloud Compare
     4 September 2018 -- created after returning to Samara with locks changed
+
+  MODIFICATIONS:
+
+    Modified by Elias Neuman-Donihue, September 9, 2022 - added caching header size for faster seeking
   
 ===============================================================================
 */
@@ -49,8 +53,10 @@ public:
   virtual BOOL open(FILE* file, const CHAR* file_name=0, U8 point_type=0, BOOL populate_header=FALSE);
 
   I32 get_format() const { return LAS_TOOLS_FORMAT_PLY; };
+  I32 get_bpp() const { return point_bytes; };
 
   BOOL seek(const I64 p_index);
+  BOOL stream_seek(const I64 p_index);
 
   ByteStreamIn* get_stream() const;
   void close(BOOL close_stream=TRUE);
@@ -70,6 +76,8 @@ private:
   F32 scale_intensity;
   F64* scale_factor;
   F64* offset;
+  I64 body_offset; // number of bytes in header
+  I32 point_bytes;  // number of bytes in point
   BOOL populated_header;
   FILE* file;
   ByteStreamIn* streamin;

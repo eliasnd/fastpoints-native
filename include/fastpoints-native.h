@@ -8,28 +8,20 @@
 #include "laslib/inc/lasreader_ply.hpp"
 #include "laslib/inc/las2las.hpp"
 #include "callbackstream.h"
+#include "Converter/modules/unsuck/unsuck.hpp"
+#include "Converter/modules/unsuck/TaskPool.hpp"
 
 #include "laspoint.hpp"
 #include "lasreader.hpp"
+#include "structures.h"
+#include "laszip/laszip_api.h"
+
+using std::mutex;
 
 using namespace std;
 using namespace potree_converter;
 
 typedef void (*LoggingCallback)(const char *message);
-
-struct Vector3
-{
-    float x;
-    float y;
-    float z;
-};
-
-struct Color {
-    U16 r;
-    U16 b;
-    U16 g;
-    U16 a;
-};
 
 extern "C" {
     const char* HelloWorld();

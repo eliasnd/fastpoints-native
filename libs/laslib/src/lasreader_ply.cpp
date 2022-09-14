@@ -25,6 +25,11 @@
   CHANGE HISTORY:
   
     see corresponding header file
+
+
+  MODIFICATIONS:
+
+    modified by Elias Neuman-Donihue, September 9 2022
   
 ===============================================================================
 */
@@ -32,12 +37,15 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <iostream>
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
 #include "bytestreamin_file.hpp"
+
+using namespace std;
 
 extern "C" FILE* fopen_compressed(const char* filename, const char* mode, bool* piped);
 
@@ -583,7 +591,9 @@ void LASreaderPLY::add_attribute(I32 attribute_type, const char* name, const cha
 
 BOOL LASreaderPLY::seek(const I64 p_index)
 {
+  // std::cout << "seek";
   U32 delta = 0;
+  
   if (p_index > p_count)
   {
     delta = (U32)(p_index - p_count);
@@ -625,6 +635,16 @@ BOOL LASreaderPLY::seek(const I64 p_index)
     read_point_default();
     delta--;
   }
+  p_count = p_index;
+  return TRUE;
+}
+
+BOOL LASreaderPLY::stream_seek(const I64 p_index) {
+  if (!streamin)
+    return FALSE; // Cannot stream seek on ascii
+
+  streamin->seek(body_offset + point_bytes * p_index);
+  read_point_default();
   p_count = p_index;
   return TRUE;
 }
@@ -820,6 +840,8 @@ LASreaderPLY::LASreaderPLY()
   translate_intensity = 0.0f;
   scale_intensity = 1.0f;
   number_attributes = 0;
+  body_offset = 0;
+  point_bytes = 0;
   clean();
 }
 
@@ -1540,6 +1562,8 @@ BOOL LASreaderPLY::parse_header(BOOL quiet)
   memset(parse_string, 0, 64);
   memset(type_string, 0, 64);
 
+  point_bytes = 0;
+
   // remaining header lines describing file
 
   while (true)
@@ -1549,6 +1573,7 @@ BOOL LASreaderPLY::parse_header(BOOL quiet)
     
     if (strncmp(line, "end_header", 10) == 0)
     {
+      body_offset = ftell(file);
       break;
     }
     else if (skip_remaining)
@@ -1678,6 +1703,7 @@ BOOL LASreaderPLY::parse_header(BOOL quiet)
           type_string[items] = 'f';
           items++;
         }
+        point_bytes += 4;
       }
       else if ((strncmp(&line[9], "double ", 7) == 0) || (strncmp(&line[9], "float64 ", 8) == 0))
       {
@@ -1745,6 +1771,7 @@ BOOL LASreaderPLY::parse_header(BOOL quiet)
           type_string[items] = 'd';
           items++;
         }
+        point_bytes += 8;
       }
       else if (strncmp(&line[9], "uchar", 5) == 0)
       {
@@ -1786,6 +1813,7 @@ BOOL LASreaderPLY::parse_header(BOOL quiet)
           type_string[items] = 'f';
           items++;
         }
+        point_bytes += 1;
       }
       else if (strncmp(&line[9], "int", 3) == 0)
       {
@@ -1800,6 +1828,7 @@ BOOL LASreaderPLY::parse_header(BOOL quiet)
         parse_string[items] = '0' + num;
         type_string[items] = 'i';
         items++;
+        point_bytes += 4;
       }
       else if (strncmp(&line[9], "uint", 4) == 0)
       {
@@ -1814,6 +1843,7 @@ BOOL LASreaderPLY::parse_header(BOOL quiet)
         parse_string[items] = '0' + num;
         type_string[items] = 'I';
         items++;
+        point_bytes += 4;
       }
       else
       {     

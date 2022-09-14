@@ -2,11 +2,18 @@ cmake_minimum_required(VERSION 3.24)
 set(CMAKE_BUILD_TYPE Debug)
 # message(STATUS "${CMAKE_BUILD_TYPE}")
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
 project(fastpoints-native)
 
 set(HEADER_FILES  
 	./include/fastpoints-native.h
     ./include/callbacks.h
+    ./include/sampler.h
+    ./include/ply_sampler.h
+    ./include/las_sampler.h
+    ./include/laz_sampler.h
 )
 
 add_library(fastpoints-native MODULE src/fastpoints-native.cpp)

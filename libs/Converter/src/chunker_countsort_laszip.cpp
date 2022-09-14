@@ -6,6 +6,7 @@
 #include <mutex>
 #include <memory>
 #include <atomic>
+#include <thread>
 
 #include "chunker_countsort_laszip.h"
 
