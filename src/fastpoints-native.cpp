@@ -24,35 +24,48 @@ extern "C" {
 
         char* file_name = source;
 
-        bool conversion_needed = 
-            strstr(file_name, ".las") == NULL && strstr(file_name, ".LAS") == NULL &&
-            strstr(file_name, ".laz") == NULL && strstr(file_name, ".LAZ") == NULL;
+        if (strstr(file_name, ".las") == NULL && strstr(file_name, ".LAS") == NULL &&
+            strstr(file_name, ".laz") == NULL && strstr(file_name, ".LAZ") == NULL) {
 
-        if (conversion_needed) {
-            cb("running conversion");
             char arg0[] = "./las2las64";
 
             char arg1[] = "-i";
             char arg2[strlen(file_name)];
-            strncpy(arg2, file_name, strlen(file_name));
+            strcpy(arg2, file_name);
 
-            file_name = "tmp.laz";
+            char* out_name = "tmp.las";
 
             char arg3[] = "-o";
-            char arg4[strlen(file_name)];
-            strncpy(arg4, file_name, strlen(file_name));
+            char arg4[strlen(out_name)];
+            strncpy(arg4, out_name, strlen(out_name));
 
             char* argv[] = {arg0, arg1, arg2, arg3, arg4};
-            las2las(5, argv);
-            cb("conversion complete");
-        }
-        
-        cb("starting octree generation");
-        convert(file_name, outdir);
-        cb("octree done");
 
-        if (conversion_needed) {
-            remove(file_name);
+            std::chrono::steady_clock::time_point conversion_start = std::chrono::steady_clock::now();
+            cb("Starting ply conversion");
+
+            las2las(5, argv);
+
+            std::chrono::steady_clock::time_point conversion_end = std::chrono::steady_clock::now();
+            cb(("Converted ply in " + to_string(std::chrono::duration_cast<std::chrono::milliseconds>(conversion_end - conversion_start).count()) + " ms").c_str());
+
+            std::chrono::steady_clock::time_point octree_start = std::chrono::steady_clock::now();
+            cb("Starting octree construction");
+
+            convert(out_name, outdir);
+
+            std::chrono::steady_clock::time_point octree_end = std::chrono::steady_clock::now();
+            cb(("Constructed octree in " + to_string(std::chrono::duration_cast<std::chrono::milliseconds>(octree_end - octree_start).count()) + " ms").c_str());
+
+            remove(out_name);
+        } else {
+            std::chrono::steady_clock::time_point octree_start = std::chrono::steady_clock::now();
+            cb("Starting octree construction");
+
+            convert(file_name, outdir);
+
+            std::chrono::steady_clock::time_point octree_end = std::chrono::steady_clock::now();
+            cb(("Constructed octree in " + to_string(std::chrono::duration_cast<std::chrono::milliseconds>(octree_end - octree_start).count()) + " ms").c_str());
         }
     }
 
@@ -214,8 +227,5 @@ extern "C" {
         }
 
         pool.waitTillEmpty();
-
-        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        cout << "Populating took " + to_string(std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count());
     }
 }
