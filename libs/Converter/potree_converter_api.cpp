@@ -21,6 +21,8 @@ using namespace std;
 
 namespace potree_converter {
 
+    bool converter_running;
+
     Options parseArguments(int argc, char** argv) {
         Arguments args(argc, argv);
 
@@ -301,11 +303,11 @@ namespace potree_converter {
         }
     };
 
-    shared_ptr<Monitor> startMonitoring(State& state) {
+    shared_ptr<Monitor> startMonitoring(State& state, ProgressCallback progressCallback) {
 
         shared_ptr<Monitor> monitor = make_shared<Monitor>();
 
-        monitor->t = thread([monitor, &state]() {
+        monitor->t = thread([monitor, &state, progressCallback]() {
 
             using namespace std::chrono_literals;
 
@@ -338,6 +340,9 @@ namespace potree_converter {
                     << "[RAM: " << strRAM << ", CPU: " << strCPU << "]";
 
                 cout << ss.str() << endl;
+
+                if (progressCallback != NULL)
+                    progressCallback((float)progressTotal / 100);
 
                 std::this_thread::sleep_for(1'000ms);
             }
@@ -446,7 +451,11 @@ namespace potree_converter {
 
     }
 
-    void convert(string source, string outdir) {
+    void convert(string source, string outdir, string method, string encoding, string chunkMethod, ProgressCallback progressCallback) {
+
+        progressCallback(0);
+
+        converter_running = true;
 
         cout << "Converting " << source << " to " << outdir << endl;
 
@@ -462,9 +471,9 @@ namespace potree_converter {
         Options options;
         options.source = *new vector<string>(1, source);
         options.outdir = outdir;
-        options.method = "poisson";
-        options.encoding = "DEFAULT";
-        options.chunkMethod = "LASZIP";
+        options.method = method;
+        options.encoding = encoding;
+        options.chunkMethod = chunkMethod;
         options.keepChunks = false;
         options.noChunking = false;
         options.noIndexing = false;
@@ -488,7 +497,7 @@ namespace potree_converter {
         state.pointsTotal = stats.totalPoints;
         state.bytesProcessed = stats.totalBytes;
 
-        auto monitor = startMonitoring(state);
+        auto monitor = startMonitoring(state, progressCallback);
 
 
         { // this is the real important stuff
@@ -502,5 +511,9 @@ namespace potree_converter {
         monitor->stop();
 
         createReport(options, sources, targetDir, stats, state, tStart);
+
+        converter_running = false;
+
+        progressCallback(1);
     }
 }

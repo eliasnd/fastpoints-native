@@ -21,11 +21,35 @@ using std::mutex;
 using namespace std;
 using namespace potree_converter;
 
-typedef void (*LoggingCallback)(const char *message);
+typedef void (*LoggingCallback)(const char* message);
+typedef void (*ProgressCallback)(float value);
+typedef void (*StatusCallback)(int status); // Status callback is called when status of a point cloud changes
+
+class NativePointCloudHandle {
+    public:
+    string source;
+
+    Vector3* points;
+    Color* colors;
+    int decimated_size;
+
+    string outdir;
+    string method;
+    string encoding;
+    string chunk_method;
+    ProgressCallback progressCallback;
+    StatusCallback statusCallback;
+
+    ~NativePointCloudHandle()
+    {
+        int i = 0;
+    }
+};
 
 extern "C" {
-    const char* HelloWorld();
-    const char* TestCallback(LoggingCallback cb);
-    void RunConverter(char* source, char* outDir, LoggingCallback cb);
-    void PopulateDecimatedCloud(char* source, Vector3* points, Color* colors, int decimatedSize, LoggingCallback cb);
+    void InitializeConverter(LoggingCallback cb);
+    void StopConverter();
+
+    NativePointCloudHandle* AddPointCloud(const char* source, Vector3* points, Color* colors, int decimated_size, const char* outdir, const char* method, const char* encoding, const char* chunk_method, StatusCallback scb, ProgressCallback pcb);
+    bool RemovePointCloud(NativePointCloudHandle* handle);
 }

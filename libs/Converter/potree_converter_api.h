@@ -1,6 +1,8 @@
 using namespace std;
 
+typedef void (*ProgressCallback)(float value);
+
 namespace potree_converter {
     // void decimate(string source, int count);
-    void convert(string source, string outdir);
+    void convert(string source, string outdir, string method = "poisson", string encoding = "DEFAULT", string chunkMethod = "LASZIP", ProgressCallback progressCallback = NULL);
 }
