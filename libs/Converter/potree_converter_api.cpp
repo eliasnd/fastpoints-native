@@ -303,17 +303,20 @@ namespace potree_converter {
         }
     };
 
-    shared_ptr<Monitor> startMonitoring(State& state, ProgressCallback progressCallback) {
+    shared_ptr<Monitor> startMonitoring(State& state, ProgressCallback progressCallback, CancelCallback shouldCancel) {
 
         shared_ptr<Monitor> monitor = make_shared<Monitor>();
 
-        monitor->t = thread([monitor, &state, progressCallback]() {
+        monitor->t = thread([monitor, &state, progressCallback, shouldCancel]() {
 
             using namespace std::chrono_literals;
 
             std::this_thread::sleep_for(1'000ms);
 
             while (!monitor->stopRequested) {
+
+                if (shouldCancel())
+                    return;
 
                 auto ram = getMemoryData();
                 auto CPU = getCpuData();
@@ -353,7 +356,7 @@ namespace potree_converter {
     }
 
 
-    void chunking(Options& options, vector<Source>& sources, string targetDir, Stats& stats, State& state, Attributes outputAttributes) {
+    void chunking(Options& options, vector<Source>& sources, string targetDir, Stats& stats, State& state, Attributes outputAttributes, CancelCallback shouldCancel) {
 
         if (options.noChunking) {
             return;
@@ -361,7 +364,7 @@ namespace potree_converter {
 
         if (options.chunkMethod == "LASZIP") {
 
-            chunker_countsort_laszip::doChunking(sources, targetDir, stats.min, stats.max, state, outputAttributes);
+            chunker_countsort_laszip::doChunking(sources, targetDir, stats.min, stats.max, state, outputAttributes, shouldCancel);
 
         } else if (options.chunkMethod == "LAS_CUSTOM") {
 
@@ -379,7 +382,7 @@ namespace potree_converter {
         }
     }
 
-    void indexing(Options& options, string targetDir, State& state) {
+    void indexing(Options& options, string targetDir, State& state, CancelCallback shouldCancel) {
 
         if (options.noIndexing) {
             return;
@@ -388,17 +391,17 @@ namespace potree_converter {
         if (options.method == "random") {
 
             SamplerRandom sampler;
-            indexer::doIndexing(targetDir, state, options, sampler);
+            indexer::doIndexing(targetDir, state, options, sampler, shouldCancel);
 
         } else if (options.method == "poisson") {
 
             SamplerPoisson sampler;
-            indexer::doIndexing(targetDir, state, options, sampler);
+            indexer::doIndexing(targetDir, state, options, sampler, shouldCancel);
 
         } else if (options.method == "poisson_average") {
 
             SamplerPoissonAverage sampler;
-            indexer::doIndexing(targetDir, state, options, sampler);
+            indexer::doIndexing(targetDir, state, options, sampler, shouldCancel);
 
         }
     }
@@ -451,7 +454,7 @@ namespace potree_converter {
 
     }
 
-    void convert(string source, string outdir, string method, string encoding, string chunkMethod, ProgressCallback progressCallback) {
+    void convert(string source, string outdir, string method, string encoding, string chunkMethod, ProgressCallback progressCallback, CancelCallback shouldCancel) {
 
         progressCallback(0);
 
@@ -497,14 +500,14 @@ namespace potree_converter {
         state.pointsTotal = stats.totalPoints;
         state.bytesProcessed = stats.totalBytes;
 
-        auto monitor = startMonitoring(state, progressCallback);
+        auto monitor = startMonitoring(state, progressCallback, shouldCancel);
 
 
         { // this is the real important stuff
 
-            chunking(options, sources, targetDir, stats, state, outputAttributes);
+            chunking(options, sources, targetDir, stats, state, outputAttributes, shouldCancel);
 
-            indexing(options, targetDir, state);
+            indexing(options, targetDir, state, shouldCancel);
 
         }
 

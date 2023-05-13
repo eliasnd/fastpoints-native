@@ -1,4 +1,3 @@
-
 #include <cerrno>
 #include <execution>
 #include <algorithm>
@@ -666,7 +665,7 @@ vector<NodeCandidate> createNodes(vector<vector<int64_t>>& pyramid) {
 // 2. Hierarchy from counter grid
 // 3. identify nodes that need further refinment
 // 4. Recursively repeat at 1. for identified nodes
-void buildHierarchy(Indexer* indexer, Node* node, shared_ptr<Buffer> points, int64_t numPoints, int64_t depth = 0) {
+void buildHierarchy(Indexer* indexer, Node* node, shared_ptr<Buffer> points, int64_t numPoints, int64_t depth = 0, CancelCallback shouldCancel = NULL) {
 
 	if (numPoints < maxPointsPerChunk) {
 		Node* realization = node;
@@ -716,11 +715,17 @@ void buildHierarchy(Indexer* indexer, Node* node, shared_ptr<Buffer> points, int
 		return index;
 	};
 
+	if (shouldCancel())
+		return;
+
 	// COUNTING
 	for (int64_t i = 0; i < numPoints; i++) {
 		auto index = gridIndexOf(i);
 		counters[index]++;
 	}
+
+	if (shouldCancel())
+		return;
 
 	{ // DISTRIBUTING
 		vector<int64_t> offsets(counters.size(), 0);
@@ -753,6 +758,9 @@ void buildHierarchy(Indexer* indexer, Node* node, shared_ptr<Buffer> points, int
 
 		memcpy(points->data, tmp.data, numPoints * bpp);
 	}
+
+	if (shouldCancel())
+		return;
 
 	auto pyramid = createSumPyramid(counters, counterGridSize);
 
@@ -829,6 +837,9 @@ void buildHierarchy(Indexer* indexer, Node* node, shared_ptr<Buffer> points, int
 
 		octreeDepth = std::max(octreeDepth, realization->level());
 	}
+
+	if (shouldCancel())
+		return;
 
 	{
 		lock_guard<mutex> lock(indexer->mtx_depth);
@@ -949,7 +960,10 @@ void buildHierarchy(Indexer* indexer, Node* node, shared_ptr<Buffer> points, int
 		subject->points = nullptr;
 		subject->numPoints = 0;
 
-		buildHierarchy(indexer, subject, buffer, nextNumPoins, depth + 1);
+		if (shouldCancel())
+			return;
+
+		buildHierarchy(indexer, subject, buffer, nextNumPoins, depth + 1, shouldCancel);
 	}
 
 }
@@ -1421,7 +1435,7 @@ void Writer::closeAndWait() {
 
 
 
-void doIndexing(string targetDir, State& state, Options& options, Sampler& sampler) {
+void doIndexing(string targetDir, State& state, Options& options, Sampler& sampler, CancelCallback shouldCancel) {
 
 	cout << endl;
 	cout << "=======================================" << endl;
@@ -1471,7 +1485,7 @@ void doIndexing(string targetDir, State& state, Options& options, Sampler& sampl
 	atomic_int64_t activeThreads = 0;
 	mutex mtx_nodes;
 	vector<shared_ptr<Node>> nodes;
-	TaskPool<Task> pool(numSampleThreads(), [&writeAndUnload, &state, &options, &activeThreads, tStart, &lastReport, &totalPoints, totalBytes, &pointsProcessed, chunks, &indexer, &nodes, &mtx_nodes, &sampler](auto task) {
+	TaskPool<Task> pool(numSampleThreads(), [&writeAndUnload, &state, &options, &activeThreads, tStart, &lastReport, &totalPoints, totalBytes, &pointsProcessed, chunks, &indexer, &nodes, &mtx_nodes, &sampler, shouldCancel](auto task) {
 		
 		auto chunk = task->chunk;
 		auto chunkRoot = make_shared<Node>(chunk->id, chunk->min, chunk->max);
@@ -1501,13 +1515,16 @@ void doIndexing(string targetDir, State& state, Options& options, Sampler& sampl
 
 		int64_t numPoints = pointBuffer->size / bpp;
 
-		buildHierarchy(&indexer, chunkRoot.get(), pointBuffer, numPoints);
+		buildHierarchy(&indexer, chunkRoot.get(), pointBuffer, numPoints, 0LL, shouldCancel);
 
 		auto onNodeCompleted = [&indexer](Node* node) {
 			indexer.writer->writeAndUnload(node);
 		};
 
-		sampler.sample(chunkRoot, attributes, indexer.spacing, onNodeCompleted);
+		sampler.sample(chunkRoot, attributes, indexer.spacing, onNodeCompleted, shouldCancel);
+
+		if (shouldCancel())
+			return;
 
 		indexer.flushChunkRoot(chunkRoot);
 
@@ -1544,6 +1561,9 @@ void doIndexing(string targetDir, State& state, Options& options, Sampler& sampl
 	pool.waitTillEmpty();
 	pool.close();
 
+	if (shouldCancel())
+		return;
+
 	indexer.reloadChunkRoots();
 
 	if (chunks->list.size() == 1) {
@@ -1556,7 +1576,7 @@ void doIndexing(string targetDir, State& state, Options& options, Sampler& sampl
 			indexer.writer->writeAndUnload(node);
 		};
 
-		sampler.sample(indexer.root, attributes, indexer.spacing, onNodeCompleted);
+		sampler.sample(indexer.root, attributes, indexer.spacing, onNodeCompleted, shouldCancel);
 	}
 	
 	indexer.writer->writeAndUnload(indexer.root.get());

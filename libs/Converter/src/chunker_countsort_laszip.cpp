@@ -129,7 +129,7 @@ namespace chunker_countsort_laszip {
 		vector<int> grid;
 	};
 
-	vector<std::atomic_int32_t> countPointsInCells(vector<Source> sources, Vector3 min, Vector3 max, int64_t gridSize, State& state, Attributes& outputAttributes) {
+	vector<std::atomic_int32_t> countPointsInCells(vector<Source> sources, Vector3 min, Vector3 max, int64_t gridSize, State& state, Attributes& outputAttributes, CancelCallback shouldCancel) {
 
 		cout << endl;
 		cout << "=======================================" << endl;
@@ -156,7 +156,7 @@ namespace chunker_countsort_laszip {
 			Vector3 max;
 		};
 
-		auto processor = [gridSize, &grid, tStart, &state, &outputAttributes](shared_ptr<Task> task){
+		auto processor = [gridSize, &grid, tStart, &state, &outputAttributes, shouldCancel](shared_ptr<Task> task){
 			string path = task->path;
 			int64_t start = task->firstByte;
 			int64_t numBytes = task->numBytes;
@@ -204,6 +204,9 @@ namespace chunker_countsort_laszip {
 			auto posOffset = outputAttributes.posOffset;
 
 			for (int i = 0; i < numToRead; i++) {
+				if (i % 100 == 0 && shouldCancel())	// Check every 100 if should cancel
+					return;
+
 				int64_t pointOffset = i * bpp;
 
 				laszip_read_point(laszip_reader);
@@ -638,7 +641,7 @@ namespace chunker_countsort_laszip {
 
 	}
 
-	void distributePoints(vector<Source> sources, Vector3 min, Vector3 max, string targetDir, NodeLUT& lut, State& state, Attributes& outputAttributes) {
+	void distributePoints(vector<Source> sources, Vector3 min, Vector3 max, string targetDir, NodeLUT& lut, State& state, Attributes& outputAttributes, CancelCallback shouldCancel) {
 
 		cout << endl;
 		cout << "=======================================" << endl;
@@ -674,7 +677,7 @@ namespace chunker_countsort_laszip {
 
 		printElapsedTime("distributePoints1", tStart);
 
-		auto processor = [&mtx_push_point, &counters, targetDir, &state, tStart, &outputAttributes](shared_ptr<Task> task) {
+		auto processor = [&mtx_push_point, &counters, targetDir, &state, tStart, &outputAttributes, shouldCancel](shared_ptr<Task> task) {
 
 			auto path = task->path;
 			auto batchSize = task->batchSize;
@@ -740,6 +743,9 @@ namespace chunker_countsort_laszip {
 				auto aPosition = outputAttributes.get("position");
 
 				for (int64_t i = 0; i < batchSize; i++) {
+					if (i % 100 == 0 && shouldCancel())	// Check every 100 if should cancel
+						return;
+
 					laszip_read_point(laszip_reader);
 					laszip_get_coordinates(laszip_reader, coordinates);
 
@@ -809,6 +815,9 @@ namespace chunker_countsort_laszip {
 			// COUNT POINTS PER BUCKET
 			vector<int64_t> counts(nodes.size(), 0);
 			for (int64_t i = 0; i < batchSize; i++) {
+				if (i % 100 == 0 && shouldCancel())	// Check every 100 if should cancel
+					return;
+
 				auto index = toIndex(i * bpp);
 
 				auto nodeIndex = grid[index];
@@ -859,6 +868,8 @@ namespace chunker_countsort_laszip {
 			shared_ptr<Buffer> previousBucket = nullptr;
 			int64_t previousNodeIndex = -1;
 			for (int64_t i = 0; i < batchSize; i++) {
+				if (i % 100 == 0 && shouldCancel())	// Check every 100 if should cancel
+					return;
 				int64_t pointOffset = i * bpp;
 
 				auto index = toIndex(pointOffset);
@@ -1152,7 +1163,7 @@ namespace chunker_countsort_laszip {
 		return {gridSize, lut};
 	}
 
-	void doChunking(vector<Source> sources, string targetDir, Vector3 min, Vector3 max, State& state, Attributes outputAttributes) {
+	void doChunking(vector<Source> sources, string targetDir, Vector3 min, Vector3 max, State& state, Attributes outputAttributes, CancelCallback shouldCancel) {
 
 		auto tStart = now();
 
@@ -1180,7 +1191,7 @@ namespace chunker_countsort_laszip {
 		}
 
 		// COUNT
-		auto grid = countPointsInCells(sources, min, max, gridSize, state, outputAttributes);
+		auto grid = countPointsInCells(sources, min, max, gridSize, state, outputAttributes, shouldCancel);
 
 		{ // DISTIRBUTE
 			auto tStartDistribute = now();
@@ -1188,7 +1199,7 @@ namespace chunker_countsort_laszip {
 			auto lut = createLUT(grid, gridSize);
 
 			state.currentPass = 2;
-			distributePoints(sources, min, max, targetDir, lut, state, outputAttributes);
+			distributePoints(sources, min, max, targetDir, lut, state, outputAttributes, shouldCancel);
 
 			{
 				double duration = now() - tStartDistribute;

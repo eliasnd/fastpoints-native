@@ -11,7 +11,7 @@
 struct SamplerPoisson : public Sampler {
 
 	// subsample a local octree from bottom up
-	void sample(shared_ptr<Node> node, Attributes attributes, double baseSpacing, function<void(Node*)> onNodeCompleted) {
+	void sample(shared_ptr<Node> node, Attributes attributes, double baseSpacing, function<void(Node*)> onNodeCompleted, CancelCallback shouldCancel) {
 
 		struct Point {
 			double x;
@@ -21,8 +21,10 @@ struct SamplerPoisson : public Sampler {
 			int32_t childIndex;
 		};
 
-		function<void(Node*, function<void(Node*)>)> traversePost = [&traversePost](Node* node, function<void(Node*)> callback) {
+		function<void(Node*, function<void(Node*)>)> traversePost = [&traversePost, shouldCancel](Node* node, function<void(Node*)> callback) {
 			for (auto child : node->children) {
+				if (shouldCancel())
+					break;
 
 				if (child != nullptr && !child->sampled) {
 					traversePost(child.get(), callback);

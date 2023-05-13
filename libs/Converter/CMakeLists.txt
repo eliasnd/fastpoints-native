@@ -32,7 +32,6 @@ set(HEADER_FILES
 add_library(PotreeConverter 
 	./src/chunker_countsort_laszip.cpp
 	./src/indexer.cpp 
-	./src/main.cpp
 	./src/logger.cpp
 	./modules/LasLoader/LasLoader.cpp
 	./modules/unsuck/unsuck_platform_specific.cpp

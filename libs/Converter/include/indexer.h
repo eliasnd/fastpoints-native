@@ -40,6 +40,8 @@ using std::mutex;
 
 namespace fs = std::filesystem;
 
+typedef bool (*CancelCallback)();
+
 namespace indexer{
 
 	//constexpr int numSampleThreads = 10;
@@ -200,7 +202,7 @@ namespace indexer{
 		string do_grouping() const { return "\3"; }
 	};
 
-	void doIndexing(string targetDir, State& state, Options& options, Sampler& sampler);
+	void doIndexing(string targetDir, State& state, Options& options, Sampler& sampler, CancelCallback shouldCancel);
 
 
 }

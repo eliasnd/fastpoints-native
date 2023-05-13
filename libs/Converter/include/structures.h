@@ -17,6 +17,8 @@ using std::shared_ptr;
 using std::function;
 using std::mutex;
 
+typedef bool (*CancelCallback)();
+
 struct CumulativeColor {
 	int64_t r = 0;
 	int64_t g = 0;
@@ -140,6 +142,6 @@ struct Sampler {
 
 	}
 
-	virtual void sample(shared_ptr<Node> node, Attributes attributes, double baseSpacing, function<void(Node*)> callbackNodeCompleted) = 0;
+	virtual void sample(shared_ptr<Node> node, Attributes attributes, double baseSpacing, function<void(Node*)> callbackNodeCompleted, CancelCallback shouldCancel) = 0;
 
 };
