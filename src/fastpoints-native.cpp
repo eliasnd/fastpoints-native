@@ -1,4 +1,4 @@
-// openvdb-points-unity
+// fastpoints-native
 // Copyright (C) 2023  Elias Neuman-Donihue
 
 // This program is free software: you can redistribute it and/or modify
