@@ -6,7 +6,6 @@
 #include <mutex>
 #include <memory>
 #include <atomic>
-#include <thread>
 
 #include "chunker_countsort_laszip.h"
 
@@ -129,7 +128,7 @@ namespace chunker_countsort_laszip {
 		vector<int> grid;
 	};
 
-	vector<std::atomic_int32_t> countPointsInCells(vector<Source> sources, Vector3 min, Vector3 max, int64_t gridSize, State& state, Attributes& outputAttributes, CancelCallback shouldCancel) {
+	vector<std::atomic_int32_t> countPointsInCells(vector<Source> sources, Vector3 min, Vector3 max, int64_t gridSize, State& state, Attributes& outputAttributes, Monitor* monitor, CancelCallback shouldCancel) {
 
 		cout << endl;
 		cout << "=======================================" << endl;
@@ -156,7 +155,7 @@ namespace chunker_countsort_laszip {
 			Vector3 max;
 		};
 
-		auto processor = [gridSize, &grid, tStart, &state, &outputAttributes, shouldCancel](shared_ptr<Task> task){
+		auto processor = [gridSize, &grid, tStart, &state, &outputAttributes, monitor, shouldCancel](shared_ptr<Task> task){
 			string path = task->path;
 			int64_t start = task->firstByte;
 			int64_t numBytes = task->numBytes;
@@ -166,6 +165,17 @@ namespace chunker_countsort_laszip {
 			//Vector3 offset = task->offset;
 			Vector3 min = task->min;
 			Vector3 max = task->max;
+
+			stringstream ss;
+			ss << "counting " << fs::path(task->path).filename().string() 
+				<< ", first point: " << formatNumber(task->firstPoint)
+				<< ", num points: " << formatNumber(task->numPoints);
+			// cout << ss.str();
+			// monitor->print("counter message", ss.str());
+
+			logger::INFO(ss.str());
+			
+			
 
 			thread_local unique_ptr<void, void(*)(void*)> buffer(nullptr, free);
 			thread_local int64_t bufferSize = -1;
@@ -225,9 +235,10 @@ namespace chunker_countsort_laszip {
 					double ux = (double(X) * posScale.x + posOffset.x - min.x) / size.x;
 					double uy = (double(Y) * posScale.y + posOffset.y - min.y) / size.y;
 					double uz = (double(Z) * posScale.z + posOffset.z - min.z) / size.z;
-
+					
+					double iota = 0.0001;
 					bool inBox = ux >= 0.0 && uy >= 0.0 && uz >= 0.0;
-					inBox = inBox && ux <= 1.0 && uy <= 1.0 && uz <= 1.0;
+					inBox = inBox && ux <= 1.0 + iota && uy <= 1.0 + iota && uz <= 1.0 + iota;
 
 					if (!inBox) {
 						stringstream ss;
@@ -235,6 +246,7 @@ namespace chunker_countsort_laszip {
 						ss << "box.min: " << min.toString() << endl;
 						ss << "box.max: " << max.toString() << endl;
 						ss << "point: " << Vector3(x, y, z).toString() << endl;
+						ss << "uxyz: " << Vector3(ux, uy, uz).toString() << endl;
 						ss << "file: " << path << endl;
 						ss << "PotreeConverter requires a valid bounding box to operate." << endl;
 						ss << "Please try to repair the bounding box, e.g. using lasinfo with the -repair_bb argument." << endl;
@@ -463,10 +475,19 @@ namespace chunker_countsort_laszip {
 			int offsetClassification = outputAttributes.getOffset("classification");
 			Attribute* attributeClassification = outputAttributes.get("classification");
 			auto classification = [data, point, header, offsetClassification, attributeClassification](int64_t offset) {
-				data[offset + offsetClassification] = point->classification;
+				
+				uint8_t value = 0;
+				if (point->extended_classification > 31){
+					value = point->extended_classification;
+				}else{
+					value = point->classification;
+				}
 
-				attributeClassification->min.x = std::min(attributeClassification->min.x, double(point->classification));
-				attributeClassification->max.x = std::max(attributeClassification->max.x, double(point->classification));
+				data[offset + offsetClassification] = value;
+				attributeClassification->histogram[value]++;
+
+				attributeClassification->min.x = std::min(attributeClassification->min.x, double(value));
+				attributeClassification->max.x = std::max(attributeClassification->max.x, double(value));
 			};
 
 			int offsetSourceId = outputAttributes.getOffset("point source id");
@@ -628,10 +649,10 @@ namespace chunker_countsort_laszip {
 					};
 
 					handlers.push_back(handleAttribute);
+					attributeOffset += attribute->size;
 				}
 
-				sourceOffset += attribute->size;
-				attributeOffset += attribute->size;
+				sourceOffset += inputAttribute.size;
 			}
 
 		}
@@ -641,7 +662,7 @@ namespace chunker_countsort_laszip {
 
 	}
 
-	void distributePoints(vector<Source> sources, Vector3 min, Vector3 max, string targetDir, NodeLUT& lut, State& state, Attributes& outputAttributes, CancelCallback shouldCancel) {
+	void distributePoints(vector<Source> sources, Vector3 min, Vector3 max, string targetDir, NodeLUT& lut, State& state, Attributes& outputAttributes, Monitor* monitor, CancelCallback shouldCancel) {
 
 		cout << endl;
 		cout << "=======================================" << endl;
@@ -721,6 +742,15 @@ namespace chunker_countsort_laszip {
 			// per-thread copy of outputAttributes to compute min/max in a thread-safe way
 			// will be merged to global outputAttributes instance at the end of this function
 			Attributes outputAttributesCopy = outputAttributes;
+			
+			for(auto& attribute: outputAttributesCopy.list){
+				if(attribute.name == "classification"){
+					for(int i = 0; i < attribute.histogram.size(); i++){
+						attribute.histogram[i] = 0;
+					}
+				}
+			}
+
 			{
 				laszip_POINTER laszip_reader;
 				laszip_header* header;
@@ -740,7 +770,7 @@ namespace chunker_countsort_laszip {
 				auto attributeHandlers = createAttributeHandlers(header, data, point, inputAttributes, outputAttributesCopy);
 
 				double coordinates[3];
-				auto aPosition = outputAttributes.get("position");
+				auto aPosition = outputAttributesCopy.get("position");
 
 				for (int64_t i = 0; i < batchSize; i++) {
 					if (i % 100 == 0 && shouldCancel())	// Check every 100 if should cancel
@@ -893,7 +923,7 @@ namespace chunker_countsort_laszip {
 			auto tAddBuckets = now();
 			addBuckets(targetDir, buckets);
 
-			// merge min/max of this batch into global min/max
+			// merge attribute metadata of this batch into global attribute metadata
 			for (int i = 0; i < outputAttributesCopy.list.size(); i++) {
 				Attribute& source = outputAttributesCopy.list[i];
 				Attribute& target = outputAttributes.list[i];
@@ -906,6 +936,12 @@ namespace chunker_countsort_laszip {
 				target.max.x = std::max(target.max.x, source.max.x);
 				target.max.y = std::max(target.max.y, source.max.y);
 				target.max.z = std::max(target.max.z, source.max.z);
+
+				// target.mask = target.mask | source.mask;
+				
+				for(int j = 0; j < target.histogram.size(); j++){
+					target.histogram[j] = target.histogram[j] + source.histogram[j];
+				}
 			}
 
 
@@ -999,15 +1035,32 @@ namespace chunker_countsort_laszip {
 			if (attribute.numElements == 1) {
 				jsAttribute["min"] = vector<double>{ attribute.min.x };
 				jsAttribute["max"] = vector<double>{ attribute.max.x };
+				jsAttribute["scale"] = vector<double>{ attribute.scale.x };
+				jsAttribute["offset"] = vector<double>{ attribute.offset.x };
 			} else if (attribute.numElements == 2) {
 				jsAttribute["min"] = vector<double>{ attribute.min.x, attribute.min.y};
 				jsAttribute["max"] = vector<double>{ attribute.max.x, attribute.max.y};
+				jsAttribute["scale"] = vector<double>{ attribute.scale.x, attribute.scale.y};
+				jsAttribute["offset"] = vector<double>{ attribute.offset.x, attribute.offset.y};
 			} else if (attribute.numElements == 3) {
 				jsAttribute["min"] = vector<double>{ attribute.min.x, attribute.min.y, attribute.min.z };
 				jsAttribute["max"] = vector<double>{ attribute.max.x, attribute.max.y, attribute.max.z };
+				jsAttribute["scale"] = vector<double>{ attribute.scale.x, attribute.scale.y, attribute.scale.z };
+				jsAttribute["offset"] = vector<double>{ attribute.offset.x, attribute.offset.y, attribute.offset.z };
 			}
-			
 
+			bool emptyHistogram = true;
+			for(int i = 0; i < attribute.histogram.size(); i++){
+				if(attribute.histogram[i] != 0){
+					emptyHistogram = false;
+				}
+			}
+
+			if(attribute.size == 1 && !emptyHistogram){
+				json jsHistogram = attribute.histogram;
+
+				jsAttribute["histogram"] = jsHistogram;
+			}
 
 			js["attributes"].push_back(jsAttribute);
 		}
@@ -1163,13 +1216,13 @@ namespace chunker_countsort_laszip {
 		return {gridSize, lut};
 	}
 
-	void doChunking(vector<Source> sources, string targetDir, Vector3 min, Vector3 max, State& state, Attributes outputAttributes, CancelCallback shouldCancel) {
+	void doChunking(vector<Source> sources, string targetDir, Vector3 min, Vector3 max, State& state, Attributes outputAttributes, Monitor* monitor, CancelCallback shouldCancel) {
 
 		auto tStart = now();
 
 		int64_t tmp = state.pointsTotal / 20;
 		maxPointsPerChunk = std::min(tmp, int64_t(10'000'000));
-		cout << "maxPointsPerChunk: " << maxPointsPerChunk << endl;
+		// cout << "maxPointsPerChunk: " << maxPointsPerChunk << endl;
 
 		if (state.pointsTotal < 100'000'000) {
 			gridSize = 128;
@@ -1191,7 +1244,7 @@ namespace chunker_countsort_laszip {
 		}
 
 		// COUNT
-		auto grid = countPointsInCells(sources, min, max, gridSize, state, outputAttributes, shouldCancel);
+		auto grid = countPointsInCells(sources, min, max, gridSize, state, outputAttributes, monitor, shouldCancel);
 
 		{ // DISTIRBUTE
 			auto tStartDistribute = now();
@@ -1199,7 +1252,7 @@ namespace chunker_countsort_laszip {
 			auto lut = createLUT(grid, gridSize);
 
 			state.currentPass = 2;
-			distributePoints(sources, min, max, targetDir, lut, state, outputAttributes, shouldCancel);
+			distributePoints(sources, min, max, targetDir, lut, state, outputAttributes, monitor, shouldCancel);
 
 			{
 				double duration = now() - tStartDistribute;

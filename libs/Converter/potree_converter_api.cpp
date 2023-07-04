@@ -12,6 +12,7 @@
 #include "Attributes.h"
 #include "PotreeConverter.h"
 #include "logger.h"
+#include "Monitor.h"
 
 #include "arguments/Arguments.hpp"
 
@@ -36,6 +37,7 @@ namespace potree_converter {
         args.addArgument("no-chunking", "Disable chunking phase");
         args.addArgument("no-indexing", "Disable indexing phase");
         args.addArgument("attributes", "Attributes in output file");
+        args.addArgument("projection", "Add the projection of the pointcloud to the metadata");
         args.addArgument("generate-page,p", "Generate a ready to use web page with the given name");
         args.addArgument("title", "Page title used when generating a web page");
 
@@ -116,6 +118,7 @@ namespace potree_converter {
             pageName = args.get("generate-page").as<string>();
         }
         string pageTitle = args.get("title").as<string>();
+        string projection = args.get("projection").as<string>();
 
         bool keepChunks = args.has("keep-chunks");
         bool noChunking = args.has("no-chunking");
@@ -132,6 +135,7 @@ namespace potree_converter {
         options.generatePage = generatePage;
         options.pageName = pageName;
         options.pageTitle = pageTitle;
+        options.projection = projection;
 
         options.keepChunks = keepChunks;
         options.noChunking = noChunking;
@@ -156,7 +160,6 @@ namespace potree_converter {
 
         vector<string> expanded;
         for (auto path : paths) {
-            cout << "got path " << path << endl;
             if (fs::is_directory(path)) {
                 for (auto& entry : fs::directory_iterator(path)) {
                     string str = entry.path().string();
@@ -291,72 +294,66 @@ namespace potree_converter {
         return { min, max, totalBytes, totalPoints };
     }
 
-    struct Monitor {
-        thread t;
-        bool stopRequested = false;
+    // struct Monitor {
+    // 	thread t;
+    // 	bool stopRequested = false;
 
-        void stop() {
+    // 	void stop() {
 
-            stopRequested = true;
+    // 		stopRequested = true;
 
-            t.join();
-        }
-    };
+    // 		t.join();
+    // 	}
+    // };
 
-    shared_ptr<Monitor> startMonitoring(State& state, ProgressCallback progressCallback, CancelCallback shouldCancel) {
+    // shared_ptr<Monitor> startMonitoring(State& state) {
 
-        shared_ptr<Monitor> monitor = make_shared<Monitor>();
+    // 	shared_ptr<Monitor> monitor = make_shared<Monitor>();
 
-        monitor->t = thread([monitor, &state, progressCallback, shouldCancel]() {
+    // 	monitor->t = thread([monitor, &state]() {
 
-            using namespace std::chrono_literals;
+    // 		using namespace std::chrono_literals;
 
-            std::this_thread::sleep_for(1'000ms);
+    // 		std::this_thread::sleep_for(1'000ms);
 
-            while (!monitor->stopRequested) {
+    // 		while (!monitor->stopRequested) {
 
-                if (shouldCancel())
-                    return;
+    // 			auto ram = getMemoryData();
+    // 			auto CPU = getCpuData();
+    // 			double GB = 1024.0 * 1024.0 * 1024.0;
 
-                auto ram = getMemoryData();
-                auto CPU = getCpuData();
-                double GB = 1024.0 * 1024.0 * 1024.0;
+    // 			double throughput = (double(state.pointsProcessed) / state.duration) / 1'000'000.0;
 
-                double throughput = (double(state.pointsProcessed) / state.duration) / 1'000'000.0;
+    // 			double progressPass = 100.0 * state.progress();
+    // 			double progressTotal = (100.0 * double(state.currentPass - 1) + progressPass) / double(state.numPasses);
 
-                double progressPass = 100.0 * state.progress();
-                double progressTotal = (100.0 * double(state.currentPass - 1) + progressPass) / double(state.numPasses);
+    // 			string strProgressPass = formatNumber(progressPass) + "%";
+    // 			string strProgressTotal = formatNumber(progressTotal) + "%";
+    // 			string strTime = formatNumber(now()) + "s";
+    // 			string strDuration = formatNumber(state.duration) + "s";
+    // 			string strThroughput = formatNumber(throughput) + "MPs";
 
-                string strProgressPass = formatNumber(progressPass) + "%";
-                string strProgressTotal = formatNumber(progressTotal) + "%";
-                string strTime = formatNumber(now()) + "s";
-                string strDuration = formatNumber(state.duration) + "s";
-                string strThroughput = formatNumber(throughput) + "MPs";
+    // 			string strRAM = formatNumber(double(ram.virtual_usedByProcess) / GB, 1)
+    // 				+ "GB (highest " + formatNumber(double(ram.virtual_usedByProcess_max) / GB, 1) + "GB)";
+    // 			string strCPU = formatNumber(CPU.usage) + "%";
 
-                string strRAM = formatNumber(double(ram.virtual_usedByProcess) / GB, 1)
-                    + "GB (highest " + formatNumber(double(ram.virtual_usedByProcess_max) / GB, 1) + "GB)";
-                string strCPU = formatNumber(CPU.usage) + "%";
+    // 			stringstream ss;
+    // 			ss << "[" << strProgressTotal << ", " << strTime << "], "
+    // 				<< "[" << state.name << ": " << strProgressPass << ", duration: " << strDuration << ", throughput: " << strThroughput << "]"
+    // 				<< "[RAM: " << strRAM << ", CPU: " << strCPU << "]";
 
-                stringstream ss;
-                ss << "[" << strProgressTotal << ", " << strTime << "], "
-                    << "[" << state.name << ": " << strProgressPass << ", duration: " << strDuration << ", throughput: " << strThroughput << "]"
-                    << "[RAM: " << strRAM << ", CPU: " << strCPU << "]";
+    // 			cout << ss.str() << endl;
 
-                cout << ss.str() << endl;
+    // 			std::this_thread::sleep_for(1'000ms);
+    // 		}
 
-                if (progressCallback != NULL)
-                    progressCallback((float)progressTotal / 100);
+    // 	});
 
-                std::this_thread::sleep_for(1'000ms);
-            }
-
-        });
-
-        return monitor;
-    }
+    // 	return monitor;
+    // }
 
 
-    void chunking(Options& options, vector<Source>& sources, string targetDir, Stats& stats, State& state, Attributes outputAttributes, CancelCallback shouldCancel) {
+    void chunking(Options& options, vector<Source>& sources, string targetDir, Stats& stats, State& state, Attributes outputAttributes, Monitor* monitor, CancelCallback shouldCancel) {
 
         if (options.noChunking) {
             return;
@@ -364,7 +361,7 @@ namespace potree_converter {
 
         if (options.chunkMethod == "LASZIP") {
 
-            chunker_countsort_laszip::doChunking(sources, targetDir, stats.min, stats.max, state, outputAttributes, shouldCancel);
+            chunker_countsort_laszip::doChunking(sources, targetDir, stats.min, stats.max, state, outputAttributes, monitor, shouldCancel);
 
         } else if (options.chunkMethod == "LAS_CUSTOM") {
 
@@ -454,13 +451,15 @@ namespace potree_converter {
 
     }
 
+    #include "HierarchyBuilder.h"
+
     void convert(string source, string outdir, string method, string encoding, string chunkMethod, ProgressCallback progressCallback, CancelCallback shouldCancel) {
 
         progressCallback(0);
 
-        converter_running = true;
+            converter_running = true;
 
-        cout << "Converting " << source << " to " << outdir << endl;
+            cout << "Converting " << source << " to " << outdir << endl;
 
         double tStart = now(); 
 
@@ -470,17 +469,17 @@ namespace potree_converter {
         cout << "#threads: " << cpuData.numProcessors << endl;
 
         // auto options = parseArguments(argc, argv);
-        Options ;
-        Options options;
-        options.source = *new vector<string>(1, source);
-        options.outdir = outdir;
-        options.method = method;
-        options.encoding = encoding;
-        options.chunkMethod = chunkMethod;
-        options.keepChunks = false;
-        options.noChunking = false;
-        options.noIndexing = false;
-        options.attributes = *new vector<string>();
+            Options ;
+            Options options;
+            options.source = *new vector<string>(1, source);
+            options.outdir = outdir;
+            options.method = method;
+            options.encoding = encoding;
+            options.chunkMethod = chunkMethod;
+            options.keepChunks = false;
+            options.noChunking = false;
+            options.noIndexing = false;
+            options.attributes = *new vector<string>();
 
         auto [name, sources] = curateSources(options.source);
         if (options.name.size() == 0) {
@@ -494,18 +493,21 @@ namespace potree_converter {
         
         string targetDir = options.outdir;
         cout << "target directory: '" << targetDir << "'" << endl;
+        fs::create_directories(targetDir);
         logger::addOutputFile(targetDir + "/log.txt");
 
         State state;
         state.pointsTotal = stats.totalPoints;
         state.bytesProcessed = stats.totalBytes;
 
-        auto monitor = startMonitoring(state, progressCallback, shouldCancel);
+        // auto monitor = startMonitoring(state);
+        auto monitor = make_shared<Monitor>(&state);
+        monitor->start();
 
 
         { // this is the real important stuff
 
-            chunking(options, sources, targetDir, stats, state, outputAttributes, shouldCancel);
+            chunking(options, sources, targetDir, stats, state, outputAttributes, monitor.get(), shouldCancel);
 
             indexing(options, targetDir, state, shouldCancel);
 

@@ -20,7 +20,11 @@
 using namespace std;
 using namespace potree_converter;
 
-#define DllExport __attribute__(( visibility("default") ))
+#if defined(__APPLE__)
+    #define DllExport __attribute__(( visibility("default") ))
+#elif defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
+    #define DllExport __declspec(dllexport)
+#endif
 
 extern "C" {
     LoggingCallback logging_callback;
@@ -100,8 +104,8 @@ extern "C" {
                     }
 
                     reader->seek(start + num_to_skip * i);
-                    posBuffer[i] = (Vector3){(float)reader->point.X, (float)reader->point.Y, (float)reader->point.Z};
-                    colBuffer[i] = (Color){
+                    posBuffer[i] = Vector3{(float)reader->point.X, (float)reader->point.Y, (float)reader->point.Z};
+                    colBuffer[i] = Color{
                         (uint8_t)reader->point.rgb[0],
                         (uint8_t)reader->point.rgb[1],
                         (uint8_t)reader->point.rgb[2],
@@ -163,13 +167,13 @@ extern "C" {
                         laszip_point* point_ptr;
                         laszip_get_point_pointer(laszip_reader, &point_ptr);
 
-                        posBuffer[i] = (Vector3){
+                        posBuffer[i] = Vector3{
                             (float)(coordinates[0] / scale[0] + offset[0]), 
                             (float)(coordinates[1] / scale[1] + offset[1]), 
                             (float)(coordinates[2] / scale[2] + offset[2])
                         };
 
-                        colBuffer[i] = (Color){ // 0, 0, 0, 1 };
+                        colBuffer[i] = Color{ // 0, 0, 0, 1 };
                             (uint8_t)(point_ptr->rgb[0] > 255 ? point_ptr->rgb[0] / 256.0 : point_ptr->rgb[0]), // (255.0 * point_ptr->rgb[0] / 65535),
                             (uint8_t)(point_ptr->rgb[1] > 255 ? point_ptr->rgb[1] / 256.0 : point_ptr->rgb[1]), // (255.0 * point_ptr->rgb[1] / 65535),
                             (uint8_t)(point_ptr->rgb[2] > 255 ? point_ptr->rgb[2] / 256.0 : point_ptr->rgb[2]), // (255.0 * point_ptr->rgb[2] / 65535),
@@ -230,13 +234,13 @@ extern "C" {
                         laszip_point* point_ptr;
                         laszip_get_point_pointer(laszip_reader, &point_ptr);
         
-                        posBuffer[i] = (Vector3){
+                        posBuffer[i] = Vector3{
                             (float)(coordinates[0] / scale[0] + offset[0]), 
                             (float)(coordinates[1] / scale[1] + offset[1]), 
                             (float)(coordinates[2] / scale[2] + offset[2])
                         };
 
-                        colBuffer[i] = (Color){ // 0, 0, 0, 1 };
+                        colBuffer[i] = Color{ // 0, 0, 0, 1 };
                             (uint8_t)(point_ptr->rgb[0] > 255 ? point_ptr->rgb[0] / 256.0 : point_ptr->rgb[0]), // (255.0 * point_ptr->rgb[0] / 65535),
                             (uint8_t)(point_ptr->rgb[1] > 255 ? point_ptr->rgb[1] / 256.0 : point_ptr->rgb[1]), // (255.0 * point_ptr->rgb[1] / 65535),
                             (uint8_t)(point_ptr->rgb[2] > 255 ? point_ptr->rgb[2] / 256.0 : point_ptr->rgb[2]), // (255.0 * point_ptr->rgb[2] / 65535),
@@ -325,13 +329,12 @@ extern "C" {
             char arg0[] = "./las2las64";
 
             char arg1[] = "-i";
-            char arg2[strlen(file_name)];
-            strcpy(arg2, file_name);
+            char* arg2 = strdup(file_name);
 
-            char* out_name = "tmp.las";
+            char out_name[] = "tmp.las";
 
             char arg3[] = "-o";
-            char arg4[strlen(out_name)];
+            char* arg4 = strdup(out_name);
             strncpy(arg4, out_name, strlen(out_name));
 
             char* argv[] = {arg0, arg1, arg2, arg3, arg4};
