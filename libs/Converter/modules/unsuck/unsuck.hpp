@@ -34,6 +34,8 @@ using std::ios;
 using std::shared_ptr;
 using std::make_shared;
 using std::chrono::high_resolution_clock;
+using std::min;
+using std::max;
 
 namespace fs = std::filesystem;
 
