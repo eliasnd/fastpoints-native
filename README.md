@@ -4,6 +4,8 @@ This is the native side of the FastPoints Unity point cloud renderer. For inform
 
 ## Installation
 
+### MacOS
+
 1. Download source code
 2. Install CMake 3.25 or later
 3. Create and jump into folder "build"
@@ -25,6 +27,22 @@ This is the native side of the FastPoints Unity point cloud renderer. For inform
     cp fastpoints-native.bundle /path/to/project/Assets/Plug-Ins/fastpoints-native.bundle
     ```
 
+### Windows
+
+1. Download source code
+2. Install Cmake 3.25 or later
+3. Create and jump into folder "build"
+
+    ```
+    mkdir build
+    cd build
+    ```
+4. Run CMake
+    ```
+    cmake ../
+    ```
+5. Open Visual Studio solution ./fastpoints-native.sln and compile it in release mode
+6. Copy the generated `fastpoints-native.dll` and `laszip.dll` files into the `Assets/Plugins` folder of your Unity project
 
 ## Contributing
 
