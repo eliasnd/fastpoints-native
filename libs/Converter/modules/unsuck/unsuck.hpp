@@ -34,6 +34,8 @@ using std::ios;
 using std::shared_ptr;
 using std::make_shared;
 using std::chrono::high_resolution_clock;
+using std::min;
+using std::max;
 
 namespace fs = std::filesystem;
 
@@ -167,6 +169,19 @@ struct Buffer {
 	template<class T>
 	void set(T value, int64_t position) {
 		memcpy(data_u8 + position, &value, sizeof(T));
+	}
+
+	template<class T>
+	T get(int64_t position) {
+		T value;
+
+		memcpy(
+			&value, 
+			data_u8 + position, 
+			sizeof(T)
+		);
+
+		return value;
 	}
 
 	inline void write(void* source, int64_t size) {

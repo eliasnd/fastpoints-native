@@ -123,6 +123,22 @@ struct Node {
 
 		return true;
 	}
+
+	Node* find(string name){
+
+		Node* current = this;
+
+		int depth = name.size() - 1;
+
+		for(int level = 1; level <= depth; level++){
+			int index = name.at(level) - '0';
+
+			current = current->children[index].get();
+		}
+
+		return current;
+	}
+
 };
 
 struct SamplerState {
@@ -142,6 +158,10 @@ struct Sampler {
 
 	}
 
-	virtual void sample(shared_ptr<Node> node, Attributes attributes, double baseSpacing, function<void(Node*)> callbackNodeCompleted, CancelCallback shouldCancel) = 0;
+	virtual void sample(Node* node, Attributes attributes, double baseSpacing, 
+		function<void(Node*)> callbackNodeCompleted,
+		function<void(Node*)> callbackNodeDiscarded,
+		CancelCallback shouldCancel
+	) = 0;
 
 };

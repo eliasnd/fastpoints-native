@@ -13,6 +13,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#define NOMINMAX
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -36,6 +37,12 @@ using std::mutex;
 
 using namespace std;
 using namespace potree_converter;
+
+#if defined(__APPLE__)
+    #define DllExport __attribute__(( visibility("default") ))
+#elif defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
+    #define DllExport __declspec(dllexport)
+#endif
 
 typedef void (*LoggingCallback)(const char* message);
 typedef void (*ProgressCallback)(float value);
@@ -63,9 +70,9 @@ class NativePointCloudHandle {
 };
 
 extern "C" {
-    void InitializeConverter(LoggingCallback cb);
-    void StopConverter();
+    DllExport void InitializeConverter(LoggingCallback cb);
+    DllExport void StopConverter();
 
-    NativePointCloudHandle* AddPointCloud(const char* source, Vector3* points, Color* colors, int decimated_size, const char* outdir, const char* method, const char* encoding, const char* chunk_method, StatusCallback scb, ProgressCallback pcb);
-    bool RemovePointCloud(NativePointCloudHandle* handle);
+    DllExport NativePointCloudHandle* AddPointCloud(const char* source, Vector3* points, Color* colors, int decimated_size, const char* outdir, const char* method, const char* encoding, const char* chunk_method, StatusCallback scb, ProgressCallback pcb);
+    DllExport bool RemovePointCloud(NativePointCloudHandle* handle);
 }

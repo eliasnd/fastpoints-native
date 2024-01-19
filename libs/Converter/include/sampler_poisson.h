@@ -11,7 +11,11 @@
 struct SamplerPoisson : public Sampler {
 
 	// subsample a local octree from bottom up
-	void sample(shared_ptr<Node> node, Attributes attributes, double baseSpacing, function<void(Node*)> onNodeCompleted, CancelCallback shouldCancel) {
+	void sample(Node* node, Attributes attributes, double baseSpacing, 
+		function<void(Node*)> onNodeCompleted, 
+		function<void(Node*)> onNodeDiscarded,
+		CancelCallback shouldCancel
+	) {
 
 		struct Point {
 			double x;
@@ -38,7 +42,7 @@ struct SamplerPoisson : public Sampler {
 		Vector3 scale = attributes.posScale;
 		Vector3 offset = attributes.posOffset;
 
-		traversePost(node.get(), [bytesPerPoint, baseSpacing, scale, offset, &onNodeCompleted, attributes](Node* node) {
+		traversePost(node, [bytesPerPoint, baseSpacing, scale, offset, &onNodeCompleted, &onNodeDiscarded, attributes](Node* node) {
 			node->sampled = true;
 
 			int64_t numPoints = node->numPoints;
@@ -106,7 +110,7 @@ struct SamplerPoisson : public Sampler {
 					
 						Point point = { x, y, z, apple_i, apple_childIndex };
 					#else
-						Point point = { x, y, z, tt, ttt };
+						Point point = { x, y, z, i, childIndex };
 					#endif
 
 					points.push_back(point);
@@ -280,11 +284,23 @@ struct SamplerPoisson : public Sampler {
 				}
 
 				if (numRejected == 0 && child->isLeaf()) {
+					onNodeDiscarded(child.get());
+
 					node->children[childIndex] = nullptr;
 				} if (numRejected > 0) {
 					child->points = rejected;
 					child->numPoints = numRejected;
 
+					onNodeCompleted(child.get());
+				} else if(numRejected == 0) {
+					// the parent has taken all points from this child, 
+					// so make this child an empty inner node.
+					// Otherwise, the hierarchy file will claim that 
+					// this node has points but because it doesn't have any,
+					// decompressing the nonexistent point buffer fails
+					// https://github.com/potree/potree/issues/1125
+					child->points = nullptr;
+					child->numPoints = 0;
 					onNodeCompleted(child.get());
 				}
 			}
